@@ -26,17 +26,6 @@ my %module_attributes = (
                                                                },
                                                               ],
                                            },
-#                        account_calls  => { 
-#					   class => 'Callusion::Model::AccountCall', 
-#                                           initial_values => [
-#                                                              {
-#                                                              },
-#                                                             ],
-#                                           updated_values => [
-#                                                              {
-#                                                              },
-#                                                             ],
-#                                          },
                         account_credits => { 
                                             class => 'Callusion::Model::AccountCredit', 
                                                             initial_values => [
@@ -97,34 +86,6 @@ my %module_attributes = (
                                                                                },
                                                                               ],
                                                  },
-#                        account_fee   => { 
-#					  class => 'Callusion::Model::AccountFee', 
-#                                                            initial_values => [
-#                                                                               {
-#                                                                                type_id     => 1, 
-#                                                                                charge_date => '2009-06-06', 
-#                                                                                value       => 4.15
-#                                                                               },
-#                                                                              ],
-#                                                            updated_values => [
-#                                                                               {
-#                                                                                type_id     => 2, 
-#                                                                                charge_date => '2009-07-07', 
-#                                                                                value       => 9.99
-#                                                                               },
-#                                                                              ],
-#                                          },
-#                        account_number => { 
-#					   class => 'Callusion::Model::AccountNumber', 
-#                                                            initial_values => [
-#                                                                               {
-#                                                                               },
-#                                                                              ],
-#                                                            updated_values => [
-#                                                                               {
-#                                                                               },
-#                                                                              ],
-#                                          },
                         brands         => {
 					   class => 'Callusion::Model::Brand', 
                                                             initial_values => [
@@ -288,15 +249,6 @@ sub _delete_objects {
     $self->$clearer();
 
     return undef;
-}
-
-sub DESTROY {
-    my ($self) = @_;
-    #find source keys and only bother if it is the opoosite before
-
-    for my $module_name (keys %module_attributes) {
-#        $self->_delete_objects($module_name);        
-    } 
 }
 
 no Fey;
