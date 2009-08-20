@@ -1,4 +1,4 @@
-package Config::ObjectFiles::Config::Extractor::Source::File;
+package Feet::Extractor::Interface::File;
 
 use Moose::Role;
 

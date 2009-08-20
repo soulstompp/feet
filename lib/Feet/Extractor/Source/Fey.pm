@@ -2,6 +2,8 @@ package Feet::Extractor::Source::Fey;
 
 use Moose;
 
+with 'Feet::Extractor::Interface::SourceDriver';
+
 use Callusion::Model::Schema;
 use Fey::Meta::Class::Table;
 use Fey::Object::Iterator::FromArray;
@@ -12,18 +14,6 @@ use Callusion::Model::Account;
 use Callusion::Model::Brand;
 
 my $meta = __PACKAGE__->meta();
-
-#TODO: move to the Extractor role and have it require a _build_objects method
-#TODO: this should probably have a name with which to reference the objects
-has objects => (
-                metaclass => 'Collection::Array', 
-                isa => 'ArrayRef[Feet::Object]', 
-                is => 'rw', 
-                provides => {
-                             'push' => 'add_objects',
-                             'pop'  => 'remove_last_object',
-                            },
-               );
 
 has schema_class => (isa => 'Str', is => 'ro', required => 1);
 
@@ -61,7 +51,7 @@ sub _build_schema {
 }
 
 # once you write to kiouku we can change this to extract.
-sub extract {
+sub _extract_objects {
     my ($self) = @_;
 
     # get all tables
