@@ -2,6 +2,8 @@ package Feet::Implantor::Destination::Fey;
 
 use Moose;
 
+with 'Feet::Implantor::Interface::DestinationDriver';
+
 use Callusion::Model::Schema;
 
 my $meta = __PACKAGE__->meta();
