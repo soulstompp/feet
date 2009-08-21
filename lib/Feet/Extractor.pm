@@ -4,11 +4,17 @@ use Module::Pluggable::Object;
 
 use Moose;
 
-use aliased 'LolCatalyst::Lite::Interface::SourceDriver';
+use MooseX::AttributeHelpers;
+
+use Data::Dumper;
+
+use aliased 'Feet::Extractor::Interface::SourceDriver';
 
 has source => ( is => 'ro', isa => 'Str', required => 1, default => 'General' );
 
-has _sources => ( is => 'ro', isa => 'HashRef[Str]', lazy_build => 1 );
+has _sources => ( is => 'ro', isa => 'HashRef', lazy_build => 1 );
+
+has _driver_args => (is => 'ro', isa => 'HashRef[Str]', required => 0);
 
 has objects => (
                 metaclass => 'Collection::Array', 
@@ -19,6 +25,24 @@ has objects => (
                              'pop'  => 'remove_last_object',
                             },
                );
+
+sub BUILDARGS {
+    my ($self, %args) = @_;
+
+    my %attributes = %{ $self->meta->get_attribute_map };
+
+    $args{'_driver_args'} = {};
+        
+    for my $key (keys %args) {
+        next if exists $attributes{$key}; 
+
+        $args{'_driver_args'}->{$key} = $args{$key};
+        delete $args{$key};
+    }
+
+    return \%args;
+}
+
 
 sub _build__sources {
     my ($self) = @_;
@@ -37,21 +61,21 @@ sub _build__sources {
         Class::MOP::load_class($class);
 
         unless ($class->does(SourceDriver)) {
-             confess "Class ${class} in ${base}:: namespace does not implement Translation Driver interface";
+             confess "Class ${class} in ${base}:: namespace does not implement Source Driver interface";
         }
 
         (my $name = $class) =~ s/^\Q${base}::\E//;
 
-        $sources{$name} = $class->new;
+        $sources{$name} = $class->new(%{$self->_driver_args()});
     }
 
     return \%sources;
 }
 
-sub extract_from {
-    my ($self, $source_type) = @_;
+sub extract {
+    my ($self) = @_;
 
-    return $self->_sources->{$source_type}->extract();
+    return $self->_sources->{$self->source()}->_extract_objects();
 }
 
 sub can_extract_from {
