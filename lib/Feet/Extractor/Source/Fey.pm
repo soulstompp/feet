@@ -4,18 +4,25 @@ use Moose;
 
 with 'Feet::Extractor::Interface::SourceDriver';
 
-use Callusion::Model::Schema;
+sub _extract_objects {
+    return [];
+}
+
+return 1;
+
+__END__
+#use Callusion::Model::Schema;
 use Fey::Meta::Class::Table;
 use Fey::Object::Iterator::FromArray;
 
 use Data::Dumper;
 use Feet::Object;
-use Callusion::Model::Account;
-use Callusion::Model::Brand;
+#use Callusion::Model::Account;
+#use Callusion::Model::Brand;
 
 my $meta = __PACKAGE__->meta();
 
-has schema_class => (isa => 'Str', is => 'ro', required => 1);
+has schema_class => (isa => 'Str', is => 'ro', required => 0);
 
 has schema => (isa => 'Fey::Schema', is => 'ro', lazy => 1, builder => '_build_schema');
 
