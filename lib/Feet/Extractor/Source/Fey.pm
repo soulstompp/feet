@@ -4,36 +4,25 @@ use Moose;
 
 with 'Feet::Extractor::Interface::SourceDriver';
 
-sub _extract_objects {
-    return [];
-}
-
-return 1;
-
-__END__
-#use Callusion::Model::Schema;
 use Fey::Meta::Class::Table;
 use Fey::Object::Iterator::FromArray;
+use Fey::Loader;
 
 use Data::Dumper;
 use Feet::Object;
-#use Callusion::Model::Account;
-#use Callusion::Model::Brand;
 
 my $meta = __PACKAGE__->meta();
 
-has schema_class => (isa => 'Str', is => 'ro', required => 0);
+has schema_class => (isa => 'Str', is => 'ro', required => 1);
 
 has schema => (isa => 'Fey::Schema', is => 'ro', lazy => 1, builder => '_build_schema');
 
 sub BUILD {
     my ($self) = @_;
 
-    #TODO: do this for each table
-    for my $table ($self->schema()->tables(qw(accounts brands))) {
+    for my $table ($self->schema()->tables()) {
         my $table_name = $table->name();
 
-        print "adding attribute for $table_name\n";
         $meta->add_attribute(
                              $table_name,
                              isa => "Fey::ORM::Role::Iterator",
@@ -44,7 +33,6 @@ sub BUILD {
                              predicate => "_has_$table_name",
                             );
 
-        print "making attribute for $table_name\n";
         $meta->add_method( "_build_$table_name" => sub { my $self = shift; $self->_build_record_set($table); } );
     }
 }
@@ -57,14 +45,12 @@ sub _build_schema {
     return $schema;
 }
 
-# once you write to kiouku we can change this to extract.
 sub _extract_objects {
     my ($self) = @_;
 
-    # get all tables
-    my @tables = $self->schema()->tables(qw(accounts brands));
+    my @tables = $self->schema()->tables();
 
-    my %objects;
+    my @objects; 
 
     for my $table (@tables) {
         my $table_name = $table->name();
@@ -72,17 +58,9 @@ sub _extract_objects {
         print "requesting records for $table_name\n";
 
         my $records = $self->$table_name();
-
-        $records->reset();
-
-        my @record_objects; 
-
-        #TODO: build feet objects and put them in KioukuDB WITH relations
-
-        $objects{$table->name()} = \@record_objects;
     }
 
-    return \%objects;
+    return $self->objects();
 }
 
 sub _build_record_set {
@@ -121,7 +99,6 @@ sub _build_record_set {
 
         $target_records->reset();
 
-#        my @target_table_rows = map { $_->{$target_table->name()} } $target_records->all_as_hashes()->{$target_table->name()};        
         my @target_table_rows = map { $_->{$target_table->name()} } $target_records->all_as_hashes();        
 
         next unless scalar @target_table_rows;
@@ -253,16 +230,15 @@ sub _build_record_set {
           
         } 
 
-        print Dumper $object;       
 
-        #$self->add_objects($object);   
+        $self->add_objects($object);   
     }
      #TODO: return a nicely filled out feet::object here not a record set 
      return $record_set;
      #TODO: add the where clause for a time period if applicable 
 }
 
-#no Fey;
+no Fey;
 no Moose;
 
 1;

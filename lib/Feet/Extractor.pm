@@ -14,7 +14,7 @@ has source => ( is => 'ro', isa => 'Str', required => 1, default => 'General' );
 
 has _source_driver => ( is => 'ro', isa => 'Feet::Extractor::Interface::SourceDriver', lazy_build => 1 );
 
-has _driver_args => (is => 'ro', isa => 'HashRef[Str]', required => 0);
+has _driver_args => (is => 'ro', isa => 'HashRef', required => 0);
 
 has objects => (
                 metaclass => 'Collection::Array', 
