@@ -12,7 +12,7 @@ use aliased 'Feet::Extractor::Interface::SourceDriver';
 
 has source => ( is => 'ro', isa => 'Str', required => 1, default => 'General' );
 
-has _sources => ( is => 'ro', isa => 'HashRef', lazy_build => 1 );
+has _source_driver => ( is => 'ro', isa => 'Feet::Extractor::Interface::SourceDriver', lazy_build => 1 );
 
 has _driver_args => (is => 'ro', isa => 'HashRef[Str]', required => 0);
 
@@ -43,45 +43,47 @@ sub BUILDARGS {
     return \%args;
 }
 
-
-sub _build__sources {
+sub _build__source_driver {
     my ($self) = @_;
 
+    my $class = undef; 
+ 
     my $base = __PACKAGE__ . '::Source';
 
     my $mp = Module::Pluggable::Object->new(
                                             search_path => [$base],
-                                           ); 
+                                           );
 
-    my @classes = $mp->plugins;
+    my $class_found = 0;
 
-    my %sources;
+    for my $class_name ($mp->plugins()) {
+        (my $name) = $class_name =~ /^\Q${base}::\E(.+)/;
 
-    foreach my $class (@classes) {
-        Class::MOP::load_class($class);
-
-        unless ($class->does(SourceDriver)) {
-             confess "Class ${class} in ${base}:: namespace does not implement Source Driver interface";
+        if ($name eq $self->source()) {
+            $class = $class_name;
+            $class_found = 1;
         }
 
-        (my $name = $class) =~ s/^\Q${base}::\E//;
-
-        $sources{$name} = $class->new(%{$self->_driver_args()});
+        last if $class_found;
     }
 
-    return \%sources;
+    confess "Class ${class} in ${base}:: namespace does not appear to exist" unless $class_found;
+
+    Class::MOP::load_class($class);
+
+    unless ($class->does(SourceDriver)) {
+        confess "Class ${class} in ${base}:: namespace does not implement Source Driver interface";
+    }
+
+    my $source_driver = $class->new(%{$self->_driver_args()});
+
+    return $source_driver;
 }
 
 sub extract {
     my ($self) = @_;
 
-    return $self->_sources->{$self->source()}->_extract_objects();
-}
-
-sub can_extract_from {
-    my ($self, $source_type) = @_;
-
-    return exists $self->_sources->{$source_type};
+    return $self->_source_driver()->_extract_objects();
 }
 
 __PACKAGE__->meta->make_immutable();
