@@ -4,135 +4,52 @@ use Moose;
 
 with 'Feet::Implantor::Interface::DestinationDriver';
 
-use Callusion::Model::Schema;
-
 my $meta = __PACKAGE__->meta();
 
-my %module_attributes = (
-                         accounts       => {
-					    class => 'Callusion::Model::Account', 
-                                            initial_values => [
-                                                               {
-                                                                number   => 1234567890,
-                                                                creation_time => '2009-05-23 00:00:00',
-                                                                activation_time => '2009-05-24 00:00:00',
-                                                                pin => '12345',
-                                                               },
-                                                              ],
-                                            updated_values => [
-                                                               {
-                                                                number   => 1234567891,
-                                                                creation_time => '2009-05-19 00:00:00',
-                                                                activation_time => '2009-05-22 00:00:00',
-                                                                pin => '2345',
-                                                               },
-                                                              ],
-                                           },
-                        account_credits => { 
-                                            class => 'Callusion::Model::AccountCredit', 
-                                                            initial_values => [
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-06', 
-                                                                                value       => 5.16
-                                                                               },
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-07', 
-                                                                                value       => 1.19
-                                                                               },
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-08', 
-                                                                                value       => 2.49
-                                                                               },
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-09', 
-                                                                                value       => 35.01
-                                                                               },
-                                                                              ],
-                                                            updated_values => [
-                                                                               {
-                                                                                type_id     => 2, 
-                                                                                credit_date => '2009-07-01', 
-                                                                                value       => 8.88
-                                                                               },
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-02', 
-                                                                                value       => 8.46
-                                                                               },
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-03', 
-                                                                                value       => 0.06
-                                                                               },
-                                                                               {
-                                                                                type_id     => 1, 
-                                                                                credit_date => '2009-06-04', 
-                                                                                value       => 2.13
-                                                                               },
-                                                                              ],
-                                          },
-                        account_credit_types => { 
-                                            class => 'Callusion::Model::AccountCreditType', 
-                                                            initial_values => [
-                                                                               {
-                                                                                name       => 'test', 
-                                                                               },
-                                                                              ],
-                                                            updated_values => [
-                                                                               {
-                                                                                name       => 'test', 
-                                                                               },
-                                                                              ],
-                                                 },
-                        brands         => {
-					   class => 'Callusion::Model::Brand', 
-                                                            initial_values => [
-                                                                               {
-                                                                                name             => 'test',
-                                                                                language         => 'es',
-                                                                                incremental      => 1,
-                                                                                mark_up          => '5.000',
-                                                                                service_fee      => '0.14',
-                                                                                service_fee_days => 5,
-                                                                               },
-                                                                              ],
-                                                            updated_values => [
-                                                                               {
-                                                                                name             => 'test1',
-                                                                                language         => 'en',
-                                                                                incremental      => 2,
-                                                                                mark_up          => '3.320',
-                                                                                service_fee      => '0.15',
-                                                                                service_fee_days => 3,
-                                                                               }
-                                                                              ],
-                                          },
-                      
 has schema_class => (isa => 'Str', is => 'ro', required => 1);
 
 has schema => (isa => 'Fey::Schema', is => 'ro', lazy => 1, builder => '_build_schema');
 
+has 'object_map' => (
+      metaclass => 'Collection::Hash',
+      is        => 'rw',
+      isa       => 'HashRef[ArrayRef]',
+      lazy      => 1,
+      default   => sub { {} },
+      provides  => {
+          exists    => 'exists_in_object_map',
+          keys      => 'object_categories',
+          get       => 'get_objects_for_category',
+          set       => 'set_objects_for_category',
+      },
+);
+
+
 sub BUILD {
     my ($self) = @_;
 
-    for my $module_name (keys %module_attributes) {
-        print "adding attribute for $module_name\n";
-        my $class_name = $module_attributes{$module_name}->{'class'};
+    for my $table ($self->schema()->tables()) {
+        next if $table->is_view();
+
+        my $table_name = $table->name();
+        print "adding attribute for $table_name\n";
+        my $class_name = Fey::Meta::Class::Table->ClassForTable($table);
+
+        Class::MOP::load_class($class_name);
+        
         $meta->add_attribute(
-                             $module_name, 
+                             $table_name, 
                              isa => "ArrayRef[$class_name]", 
                              is => 'rw', 
                              lazy => 1, 
-                             builder => "_build_$module_name",
-                             clearer => "_clear_$module_name", 
-                             predicate => "_has_$module_name", 
+                             builder => "_build_$table_name",
+                             clearer => "_clear_$table_name", 
+                             predicate => "_has_$table_name", 
                             );
-        print "making attribute for $module_name";
-        $meta->add_method( "_build_$module_name" => sub { my $self = shift; $self->_build_objects($module_name); } ); 
+
+        print "making accessor for $table_name\n";
+
+        $meta->add_method( "_build_$table_name" => sub { my $self = shift; return $self->_build_record_set($table); } ); 
     }
 }
 
@@ -144,17 +61,20 @@ sub _build_schema {
     return $schema;
 }
 
-sub _build_objects {
-    my ($self) = @_;
-    my @tables = $self->schema()->tables(qw(accounts account_credits account_credit_types brands));
-}
-
 sub _build_record_set {
     my ($self, $table) = @_;
 
+    my $table_name = $table->name();
+
+    print "loading table $table_name\n";
+
+    my @objects;
+
+    my $class_name = Fey::Meta::Class::Table->ClassForTable($table);
+
     my @foreign_keys = $table->schema()->foreign_keys_for_table($table);
 
-    my @sources;
+    my @target_objects;
 
     my @target_keys;
 
@@ -162,62 +82,122 @@ sub _build_record_set {
         my $source_table = $foreign_key->source_table();
         my $target_table = $foreign_key->target_table();
 
-        next unless $source_table->name() eq $table_name;
+        next unless $source_table->name() eq $table->name();
 
         push @target_keys, $foreign_key;
 
         printf "source table: %s	target table: %s\n", $source_table->name(), $target_table->name(); 
 
-        my $name = $target_table->name();
-        print "making attribute for $name\n";
-        my $target_attribute = $attributes{$target_table->name()};
-        print "making attribute source\n";
+        my $target_attribute = $self->meta()->get_attribute($target_table->name());
         my $target_reader = $target_attribute->get_read_method();
 
         print "calling source_reader(): $target_reader\n";
 
-        push @sources, $self->$target_reader();
+        push @target_objects, @{$self->$target_reader()};
     }
 
-    for my $initial_value_set (@{$module_attributes{$table_name}->{'initial_values'}}) {
-        for my $initial_values ( $initial_value_set ) {
-            my %initial_values = %{$initial_values};   
+    my @implant_records = @{$self->get_objects_for_category($table->name())}; 
 
-            for my $foreign_key (@target_keys) {
-                my $target_table = $foreign_key->target_table();
-                my @column_pairs_set = $foreign_key->column_pairs();
+    for my $implant_record (@implant_records) {
+        my %initial_values = %{$implant_record->properties()};   
 
-                my $target_table_name = $target_table->name();
+        use Data::Dumper;
+        printf "implant record: %s\n", Dumper \%initial_values;    
 
-                my $target_object = $self->$target_table_name()->[0];
+        my %implant_references;
 
-                for my $column_pairs_set (@column_pairs_set) {
-                    for my $column_pairs (@$column_pairs_set) {
-                        my ($source_column, $target_column) = @$column_pairs;
+        for my $key (keys %initial_values) { 
+            my ($referenced_table_name, $referenced_field_name) = $key =~ /^(.+)\.(.+)$/;
+            
+            next unless $referenced_table_name && $referenced_field_name;
 
-                        my $source_column_name = $source_column->name();
-                        my $target_column_name = $target_column->name();
+            my $referenced_table = $self->schema()->table($referenced_table_name);
 
-                        $initial_values{$source_column->name()} = $target_object->$target_column_name(); 
+            die "bad relation definition $key, table $referenced_table_name can't be looked up\n" unless $referenced_table;
+             
+            die "bad relation definition $key, table $referenced_table_name doesn't have candidate key $referenced_field_name\n" unless $referenced_table->has_candidate_key($referenced_field_name); 
+
+            $implant_references{$referenced_table_name}->{$referenced_field_name} = $initial_values{$key};
+        }
+
+        use Data::Dumper;
+        printf "implant references for $table_name: %s\n", Dumper \%implant_references;
+
+        for my $foreign_key (@target_keys) {
+            my $target_table = $foreign_key->target_table();
+            my @column_pairs_set = $foreign_key->column_pairs();
+
+            my $target_object = undef;
+
+            my $target_table_name = $target_table->name();
+
+            for my $column_pairs_set (@column_pairs_set) {
+                for my $column_pairs (@$column_pairs_set) {
+                    my ($source_column, $target_column) = @$column_pairs;
+
+                    my $source_column_name = $source_column->name();
+                    my $target_column_name = $target_column->name();
+
+                    for my $implant_reference (keys %implant_references) {
+                        for my $implant_target_column (keys %{$implant_references{$target_table_name}}) {
+                            for my $target_object (@target_objects) { 
+                                my $target_parameter_name = "$target_table_name.$implant_target_column";
+
+				next unless $target_object->can($implant_target_column) && defined $target_object->$implant_target_column();
+
+                                next unless $initial_values{$target_parameter_name};
+
+                                printf "initial values %s has value: %s\n", $target_parameter_name, $initial_values{$target_parameter_name};
+
+                                
+
+                                next unless $target_object->$implant_target_column() eq $initial_values{$target_parameter_name};
+
+                                #TODO: add in the foreign key fields
+                                $initial_values{$source_column_name} = $target_object->$target_column_name();  
+    
+                                delete $initial_values{$target_parameter_name}; 
+                            }
+                        }  
                     }
                 }
             }
-
-            my $new_object = undef;
-
-            if ($new_object = $class_name->new(%initial_values)) {
-                $new_object->update(%initial_values);        
-            }
-            else {
-                $new_object = $class_name->insert(%initial_values);
-            }
-        
-            push(@objects, $new_object);
         }
+
+        my $new_object = undef;
+
+        if ($new_object = $class_name->new(%initial_values)) {
+            $new_object->update(%initial_values);        
+        }
+        else {
+            $new_object = $class_name->insert(%initial_values);
+        }
+
+        use Data::Dumper;
+        printf "adding new object: %s\n", Dumper $new_object;    
+   
+        push(@objects, $new_object);
     }
 
-    #this should return an iterator made FromArray        
     return \@objects;
+}
+
+sub _implant_objects {
+    my ($self, $objects) = @_;
+
+    my %object_map; 
+
+    for my $object (@$objects) {
+        push @{$object_map{$object->category()}}, $object;
+    }
+
+    $self->object_map(\%object_map);
+
+    for my $category (keys %object_map) {
+        $self->$category();
+    }
+
+    return 1;
 }
 
 sub _delete_objects {
@@ -255,3 +235,5 @@ sub _delete_objects {
 
 no Fey;
 no Moose;
+
+1;

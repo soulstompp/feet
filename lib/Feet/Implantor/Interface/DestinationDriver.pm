@@ -1,4 +1,4 @@
-package Feet::Implantor::Interface::Destination::Driver;
+package Feet::Implantor::Interface::DestinationDriver;
 
 use Moose::Role;
 

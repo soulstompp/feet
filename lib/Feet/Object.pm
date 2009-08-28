@@ -21,5 +21,11 @@ has properties => (
                                },
                );
 
+sub has_property {
+    my ($self, $property) = @_;
+
+    return exists $self->properties->{$property};
+} 
+
 no Moose;
 1;
