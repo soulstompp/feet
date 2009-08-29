@@ -32,7 +32,6 @@ sub BUILD {
         next if $table->is_view();
 
         my $table_name = $table->name();
-        print "adding attribute for $table_name\n";
         my $class_name = Fey::Meta::Class::Table->ClassForTable($table);
 
         Class::MOP::load_class($class_name);
@@ -46,8 +45,6 @@ sub BUILD {
                              clearer => "_clear_$table_name", 
                              predicate => "_has_$table_name", 
                             );
-
-        print "making accessor for $table_name\n";
 
         $meta->add_method( "_build_$table_name" => sub { my $self = shift; return $self->_build_record_set($table); } ); 
     }
@@ -65,8 +62,6 @@ sub _build_record_set {
     my ($self, $table) = @_;
 
     my $table_name = $table->name();
-
-    print "loading table $table_name\n";
 
     my @objects;
 
@@ -86,12 +81,8 @@ sub _build_record_set {
 
         push @target_keys, $foreign_key;
 
-        printf "source table: %s	target table: %s\n", $source_table->name(), $target_table->name(); 
-
         my $target_attribute = $self->meta()->get_attribute($target_table->name());
         my $target_reader = $target_attribute->get_read_method();
-
-        print "calling source_reader(): $target_reader\n";
 
         push @target_objects, @{$self->$target_reader()};
     }
@@ -100,9 +91,6 @@ sub _build_record_set {
 
     for my $implant_record (@implant_records) {
         my %initial_values = %{$implant_record->properties()};   
-
-        use Data::Dumper;
-        printf "implant record: %s\n", Dumper \%initial_values;    
 
         my %implant_references;
 
@@ -120,9 +108,6 @@ sub _build_record_set {
             $implant_references{$referenced_table_name}->{$referenced_field_name} = $initial_values{$key};
         }
 
-        use Data::Dumper;
-        printf "implant references for $table_name: %s\n", Dumper \%implant_references;
-
         for my $foreign_key (@target_keys) {
             my $target_table = $foreign_key->target_table();
             my @column_pairs_set = $foreign_key->column_pairs();
@@ -130,7 +115,7 @@ sub _build_record_set {
             my $target_object = undef;
 
             my $target_table_name = $target_table->name();
-
+            
             for my $column_pairs_set (@column_pairs_set) {
                 for my $column_pairs (@$column_pairs_set) {
                     my ($source_column, $target_column) = @$column_pairs;
@@ -147,13 +132,8 @@ sub _build_record_set {
 
                                 next unless $initial_values{$target_parameter_name};
 
-                                printf "initial values %s has value: %s\n", $target_parameter_name, $initial_values{$target_parameter_name};
-
-                                
-
                                 next unless $target_object->$implant_target_column() eq $initial_values{$target_parameter_name};
 
-                                #TODO: add in the foreign key fields
                                 $initial_values{$source_column_name} = $target_object->$target_column_name();  
     
                                 delete $initial_values{$target_parameter_name}; 
@@ -167,15 +147,15 @@ sub _build_record_set {
         my $new_object = undef;
 
         if ($new_object = $class_name->new(%initial_values)) {
-            $new_object->update(%initial_values);        
+            $new_object->update(%initial_values);
+
+            #TODO: clear out child objects       
+            $self->_delete_child_records($new_object); 
         }
         else {
             $new_object = $class_name->insert(%initial_values);
         }
 
-        use Data::Dumper;
-        printf "adding new object: %s\n", Dumper $new_object;    
-   
         push(@objects, $new_object);
     }
 
@@ -200,7 +180,56 @@ sub _implant_objects {
     return 1;
 }
 
-sub _delete_objects {
+sub _delete_child_records {
+    my ($self, $object) = @_;
+
+    my $table = $object->Table();
+
+    my @foreign_keys = $table->schema()->foreign_keys_for_table($table);
+
+    my @source_keys;
+
+    for my $foreign_key (@foreign_keys) {
+        my $target_table = $foreign_key->target_table();
+        my $source_table = $foreign_key->source_table();
+
+        next if $source_table->name() eq $table->name();
+
+        push @source_keys, $foreign_key;
+    }
+
+    for my $source_key (@source_keys) {
+        my $query = $self->schema_class()->SQLFactoryClass()->new_select();
+
+        $query->select($source_key->source_table());
+
+        $query->from($source_key->source_table(), $source_key->target_table(), $source_key);
+
+        my $primary_keys = $source_key->target_table()->primary_key();
+
+        for my $primary_key (@$primary_keys) {
+            my $primary_key_name = $primary_key->name();
+            $query->where($primary_key, '=', $object->$primary_key_name());
+        }
+
+        #TODO: allow the source to be passed along as an argument.
+        my $dbh = $self->schema_class->DBIManager()->default_source()->dbh();
+   
+        my $record_set = Fey::Object::Iterator::FromSelect->new(
+                                                                classes     => [ (Fey::Meta::Class::Table->ClassForTable( $source_key->source_table() )) ],
+                                                                select      => $query,
+                                                                dbh         => $dbh
+                                                               );
+
+        while (my $record = $record_set->next()) {
+            $self->_delete_child_records($record);            
+
+            $record->delete();
+        }
+    }
+}
+
+sub _delete_child_objects {
     my ($self, $module_name) = @_;
 
     my $attribute = $self->meta->get_attribute($module_name);
